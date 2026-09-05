@@ -38,6 +38,7 @@ For a contained implementation or modification with a clear scope:
 - Verify the result with fresh evidence.
 - Review the final diff before completion.
 - If hidden complexity or risk appears, upgrade to a heavier workflow.
+- If the task is bounded but context-heavy, one isolated implementer with a concise brief may be used to protect the main session context. Do not escalate to a full multi-agent review pipeline unless the additional independence materially reduces risk.
 
 ### Bugs and unexpected behavior
 
@@ -66,6 +67,7 @@ Use the Superpowers workflow as appropriate, but scale the depth of artifacts to
 - clarify requirements and success criteria;
 - consider alternatives when there is a real design choice;
 - produce a concise design/spec that captures the important behavior, invariants, risks, and acceptance tests;
+- ground the design/spec against the actual repository before approval: verify the named integration points exist, inspect relevant callers/dependencies, validate important API assumptions, and check the baseline state/tests when practical;
 - obtain approval where the workflow requires it;
 - if the same agent will immediately implement a contained change, prefer a short execution checklist over a large implementation-plan document;
 - use a detailed implementation plan when the work is broad, spans multiple independent components, will be delegated across agents/sessions, or a detailed handoff artifact materially reduces risk;
@@ -86,6 +88,8 @@ Identify the check that proves the claim, run it, inspect the actual result and 
 
 Run narrow relevant checks first. Run broader regression checks when appropriate.
 
+For long-running or expensive verification, bind the evidence to the code/artifact actually tested. Record or confirm the relevant commit/HEAD, build artifact, or equivalent state. Do not treat a stale green log from an earlier revision as proof for the current one.
+
 Never disable, skip, weaken, or rewrite tests merely to make them pass.
 
 If a test expectation legitimately changes because requested behavior changed, explain why.
@@ -93,6 +97,8 @@ If a test expectation legitimately changes because requested behavior changed, e
 ## Git and existing work
 
 Inspect repository state before nontrivial changes.
+
+Before substantial branch/worktree work, verify the actual base and tracking relationship with evidence such as `git status -sb`, `git branch -vv`, and `git rev-parse HEAD`. Confirm the worktree/branch is based on the intended commit and is not unexpectedly tracking or targeting a shared production/main branch.
 
 Preserve unrelated uncommitted user changes.
 
@@ -122,6 +128,10 @@ Explicit approval is required for destructive, irreversible, or broad external s
 - other hard-to-reverse actions.
 
 Prefer reversible and additive migrations.
+
+For server/ops changes, verify in the same effective context that will perform or consume the change: the same user/privilege level, target path or device, mount, service context, environment, and relevant configuration scope. A check performed against a different effective target is not proof.
+
+When Git does not fully cover the object being changed, use an appropriate rollback path for nontrivial server/ops work, such as a backup, snapshot, exported config, or clearly verified reverse procedure.
 
 ## External systems and retries
 
