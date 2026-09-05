@@ -238,7 +238,7 @@ GitHub → New repository → имя <client_slug>-web → Private.
 | 4. Локальный checkpoint | root | Создан/подтверждён checkpoint всего проекта |
 | 5. Root automation | root | Root checkpoint и cron проверены вручную |
 | 6. Codex для dev | root | Рабочий bundled Codex SDK из root-cache заранее скопирован в cache `dev` и запускается от `dev` |
-| 7. Общая Codex-среда | root | Superpowers и глобальный AGENTS подключены к root/dev по общей серверной схеме |
+| 7. Общая Codex-среда | root | Superpowers и глобальный AGENTS подключены к root/dev; автосинхронизация AGENTS с GitHub установлена и проверена |
 | 8. Handoff | root + пользователь | State сохранён; root Remote SSH полностью закрыт |
 
 ### Часть II — DEV
@@ -306,6 +306,7 @@ df -h /
 - практически проверяет ограничения `dev` и доступ `www-data`;
 - заранее копирует рабочий Codex SDK из root-cache в cache пользователя `dev`;
 - подготавливает общую серверную Codex-среду для root/dev;
+- устанавливает и проверяет автоматическую синхронизацию глобального `AGENTS.md` с GitHub;
 - сохраняет handoff-state для новой dev-сессии.
 
 Root-блок считается завершённым только после практической проверки всех его результатов. После этого пользователь полностью закрывает root Remote SSH.
@@ -714,6 +715,8 @@ codex-cli X.Y.Z
 ```text
 /opt/superpowers/                         root-owned общая установка Superpowers
 /etc/codex/AGENTS.md                     root-owned общий глобальный AGENTS.md
+/usr/local/sbin/codex-agents-sync        root-owned updater AGENTS.md
+/etc/cron.d/codex-agents-sync            системное расписание автосинхронизации
 /root/.agents/skills/superpowers         -> /opt/superpowers/skills
 /home/dev/.agents/skills/superpowers     -> /opt/superpowers/skills
 /root/.codex/AGENTS.md                   -> /etc/codex/AGENTS.md
@@ -756,6 +759,38 @@ dev:  OK
 ```
 
 После такого финала отдельные команды `git clone`, `ln -s` и ручное копирование `AGENTS.md` не нужны. После handoff достаточно перезагрузить VS Code / открыть новый Codex chat под `dev` и один раз выполнить ChatGPT login для `dev`, если он ещё не выполнен.
+
+### 4.9.1. Автоматическая синхронизация глобального AGENTS.md
+
+GitHub-файл `codex-bootstrap/AGENTS.md` является единственным master-источником глобальных правил. Чтобы при появлении нескольких серверов не обновлять `/etc/codex/AGENTS.md` вручную на каждом, в ROOT-части устанавливаются общий sync-скрипт и системный cron-файл из того же репозитория.
+
+Под `root` выполнить одним блоком:
+
+```bash
+tmpdir="$(mktemp -d)" \
+&& curl -fsSL https://raw.githubusercontent.com/jon4eg04/usefull/main/codex-bootstrap/codex-agents-sync -o "$tmpdir/codex-agents-sync" \
+&& curl -fsSL https://raw.githubusercontent.com/jon4eg04/usefull/main/codex-bootstrap/codex-agents-sync.cron -o "$tmpdir/codex-agents-sync.cron" \
+&& install -o root -g root -m 0755 "$tmpdir/codex-agents-sync" /usr/local/sbin/codex-agents-sync \
+&& install -o root -g root -m 0644 "$tmpdir/codex-agents-sync.cron" /etc/cron.d/codex-agents-sync \
+&& /usr/local/sbin/codex-agents-sync \
+&& rm -rf "$tmpdir" \
+&& echo "OK: Codex AGENTS auto-sync installed"
+```
+
+Cron запускает `/usr/local/sbin/codex-agents-sync` каждые 15 минут. Сам sync-скрипт скачивает новую версию во временный файл, проверяет, что она не пустая и похожа на ожидаемый `AGENTS.md`, сравнивает её с текущей копией и заменяет `/etc/codex/AGENTS.md` только при реальном изменении. При ошибке сети, пустом или невалидном ответе существующий рабочий файл остаётся нетронутым. Фактические обновления пишутся через `logger`.
+
+Проверка под `root`:
+
+```bash
+/usr/local/sbin/codex-agents-sync
+cat /etc/cron.d/codex-agents-sync
+readlink -f /root/.codex/AGENTS.md
+runuser -u dev -- readlink -f /home/dev/.codex/AGENTS.md
+grep -F '## Process cost control' /etc/codex/AGENTS.md
+systemctl is-active cron
+```
+
+Обе пользовательские ссылки должны вести в `/etc/codex/AGENTS.md`; cron должен быть `active`. После изменения master-файла на GitHub сервер получает новую копию максимум примерно через 15 минут без ручного вмешательства. Уже открытый Codex chat не обязан перечитывать глобальный `AGENTS.md` на лету, поэтому для гарантированного применения новой версии открывается новый chat/session.
 
 # 5. Локальный Git всего проекта
 Этот контур принадлежит `root`, не имеет remote и служит быстрым checkpoint на том же сервере.
@@ -1383,6 +1418,8 @@ GitHub вернёт содержимое фактического `github_work_t
 - [ ] ChatGPT credentials root не копировались; `dev` авторизован отдельно.
 
 - [ ] Общая серверная Codex-среда (Superpowers + глобальный AGENTS.md) подключена к root и dev по единой схеме.
+
+- [ ] `/usr/local/sbin/codex-agents-sync` и `/etc/cron.d/codex-agents-sync` установлены; ручной sync проходит, cron активен.
 
 - [ ] ROOT-часть закончена до начала основной DEV-части; root Remote SSH не остаётся рабочей сессией для обычной разработки.
 
