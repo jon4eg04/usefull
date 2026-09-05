@@ -7,7 +7,11 @@
 
 - публичная и редактируемая часть находится в `/var/www/<домен>/web/`;
 
-- пользователь `dev` работает через VS Code и имеет полный доступ только внутри `web/`;
+- первоначальная системная настройка выполняется под `root`, после контрольной точки root-сессия полностью закрывается;
+
+- дальнейшая рабочая настройка и обычная разработка выполняются под пользователем `dev` через VS Code;
+
+- пользователь `dev` имеет полный доступ только внутри `web/`;
 
 - локальный Git сохраняет checkpoint всего проекта;
 
@@ -22,6 +26,13 @@
 ## 0. Как пользоваться этим гайдом
 
 Пользователю не нужно самостоятельно разбираться в разделах ниже, заранее готовить команды или решать, что запускать следующим. Технические разделы являются рабочей инструкцией для Codex.
+
+Главный маршрут разделён на две последовательные части:
+
+1. **ROOT** — аудит, системная настройка, создание `dev`, права, локальный checkpoint, подготовка Codex для `dev` и всё остальное, что требует root;
+2. **DEV** — после полного отключения root-сессии: вход под `dev`, авторизация ChatGPT/Codex, GitHub-контур, snapshots, dev-cron и дальнейшая работа.
+
+В нормальном сценарии после перехода в DEV-часть обратно в root не возвращаются. Root-подключение после этого используется только для отдельной системной диагностики или изменения, которое объективно требует root.
 
 ## 0.1. Единственный стартовый запрос
 
@@ -42,6 +53,14 @@
 ```
 
 Каталог создать как `dev:dev` с режимом `700`, файл — `600`. После полного завершения настройки гайд и временный state-файл удалить. В репозитории остаётся только краткий `docs/server-setup-report.md` внутри фактического GitHub work tree.
+
+После переключения с root на dev новый чат Codex можно начать коротко:
+
+```text
+Прочитай client-server-guide.md полностью.
+ROOT-часть уже завершена. Сейчас мы подключены как dev.
+Прочитай server-setup-state.md и продолжай с DEV-части гайда.
+```
 
 ## 0.2. Обязательный режим работы Codex
 
@@ -64,7 +83,10 @@
 15. считать существующий код внутри и выше `web/` рабочим production-кодом независимо от того, кто его писал;
 16. не удалять, не переносить и не объединять существующие файлы только ради «чистой структуры»;
 17. перед первым изменением создать или подтвердить исходный checkpoint;
-18. довести настройку до практической проверки, а не ограничиваться созданием файлов.
+18. довести настройку до практической проверки, а не ограничиваться созданием файлов;
+19. считать границу ROOT → DEV жёсткой: после неё в обычном сценарии не продолжать выполнять root-команды из старой сессии;
+20. до закрытия root-сессии заранее подготовить рабочий Codex SDK для `dev`, если штатная remote-загрузка SDK ненадёжна;
+21. не копировать между пользователями `auth.json` или другие ChatGPT credentials: `dev` авторизуется в ChatGPT отдельно один раз.
 
 ## 0.3. PowerShell и Linux shell
 
@@ -126,24 +148,36 @@ GitHub → New repository → имя <client_slug>-web → Private.
 
 Там разрешены только: текущий этап, пути, имя клиента, Apache user, GitHub repo, фактический GitHub work tree, имена wrapper/automation и результаты уже выполненных проверок. Пароли, приватные ключи, API tokens и webhook URL туда не записываются.
 
+Перед закрытием root-сессии state должен явно содержать строку о том, что ROOT-часть завершена, а также фактические `project_root`, `web_root`, `github_work_tree` и результат проверки Codex SDK для `dev`.
+
 После завершения state удаляется, а в фактическом GitHub work tree создаётся `docs/server-setup-report.md`.
 
 ## 0.7. Полный маршрут сопровождения
+
+### Часть I — ROOT
 
 | Этап | Кто работает | Результат, без которого нельзя идти дальше |
 |---|---|---|
 | 0. Read-only аудит | Codex в root-сессии | Определены пути, пользователи, права, Git, cron, Apache, ресурсы и данные |
 | 1. Уточнения | Пользователь + Codex | Известны client slug, GitHub repo и фактический GitHub scope |
-| 2. SSH-доступ dev | root + пользователь | Пользователь реально вошёл по SSH как `dev` |
-| 3. Локальный checkpoint | root | Создан/подтверждён первый checkpoint всего проекта |
-| 4. Root automation | root | Root checkpoint и cron проверены вручную |
-| 5. Ограничение прав | root | `dev` пишет в `web/`, не пишет выше, owners/groups не сломаны |
-| 6. Переподключение | пользователь | VS Code и Codex действительно работают как `dev` |
-| 7. GitHub deploy key | dev + пользователь | `ssh -T` подтверждает доступ к одной клиентской репе |
-| 8. GitHub-контур | Codex как dev | Отдельная Git metadata и wrapper работают |
-| 9. Данные и HTTP | Codex как dev, при необходимости root | SQLite snapshot целый, закрытые URL дают 403/404 |
-| 10. Dev automation | dev | Ручной GitHub-sync и первый push успешны |
-| 11. Финальная проверка | Codex + пользователь | Все тесты пройдены, создан report, временный гайд удалён |
+| 2. SSH-доступ dev | root + пользователь | Пользователь реально проверил, что вход под `dev` возможен |
+| 3. Права | root | `dev` пишет в `web/`, не пишет выше, owners/groups не сломаны |
+| 4. Локальный checkpoint | root | Создан/подтверждён checkpoint всего проекта |
+| 5. Root automation | root | Root checkpoint и cron проверены вручную |
+| 6. Codex для dev | root | Рабочий bundled Codex SDK из root-cache заранее скопирован в cache `dev` и запускается от `dev` |
+| 7. Общая Codex-среда | root | Superpowers и глобальный AGENTS подключены к root/dev по общей серверной схеме |
+| 8. Handoff | root + пользователь | State сохранён; root Remote SSH полностью закрыт |
+
+### Часть II — DEV
+
+| Этап | Кто работает | Результат, без которого нельзя идти дальше |
+|---|---|---|
+| 9. Переподключение | пользователь | VS Code действительно работает как `dev`; ChatGPT login выполнен для `dev` |
+| 10. GitHub deploy key | dev + пользователь | `ssh -T` подтверждает доступ к одной клиентской репе |
+| 11. GitHub-контур | Codex как dev | Отдельная Git metadata и wrapper работают |
+| 12. Данные и HTTP | Codex как dev | SQLite snapshot целый, закрытые URL дают 403/404 |
+| 13. Dev automation | dev | Ручной GitHub-sync и первый push успешны |
+| 14. Финальная проверка | Codex + пользователь | Все тесты пройдены, создан report, временный гайд удалён |
 
 ## 0.8. Этап 0 — обязательный read-only аудит
 
@@ -184,9 +218,9 @@ df -h /
 
 Если на уже работающем сервере аудит обнаружил намеренно более узкий GitHub scope, его нельзя автоматически расширять до всего `web/`. Такой сервер считается осознанным исключением: существующий scope сохраняется и записывается в `server-setup-report.md`. Именно так обрабатываются серверы, где в GitHub должна уходить только одна конкретная подпапка `web/`.
 
-## 0.9. Этапы 2–5 — контролируемая root-настройка
+## 0.9. ROOT-часть — контролируемая системная настройка
 
-До ограничения прав Codex:
+До закрытия root-сессии Codex:
 
 - создаёт/проверяет `dev` без sudo;
 - устанавливает необходимые пакеты;
@@ -195,21 +229,44 @@ df -h /
 - не переинициализирует уже корректный Git;
 - не меняет owner/group всего production-дерева ради `dev`;
 - настраивает root checkpoint с lock в `/run/lock`;
-- оставляет `www-data` запись только там, где она реально нужна приложению.
+- оставляет `www-data` запись только там, где она реально нужна приложению;
+- практически проверяет ограничения `dev` и доступ `www-data`;
+- заранее копирует рабочий Codex SDK из root-cache в cache пользователя `dev`;
+- подготавливает общую серверную Codex-среду для root/dev;
+- сохраняет handoff-state для новой dev-сессии.
 
-После root-настройки пользователь полностью закрывает root-подключение VS Code и открывает проект как `dev`. Первые проверки новой сессии:
+Root-блок считается завершённым только после практической проверки всех его результатов. После этого пользователь полностью закрывает root Remote SSH.
+
+## 0.10. Граница ROOT → DEV
+
+После завершения ROOT-части:
+
+1. сохранить актуальный `server-setup-state.md` и временную копию гайда в `/home/dev/.server-setup/`;
+2. убедиться, что Codex SDK запускается от `dev`;
+3. полностью закрыть root Remote SSH connection;
+4. подключиться к тому же серверу через alias/SSH-пользователя `dev`;
+5. открыть рабочий `web_root`;
+6. в новом терминале проверить:
 
 ```bash
 whoami
+echo "$HOME"
 pwd
 ```
 
-## 0.10. Этапы 7–10 — GitHub под dev
+Ожидается `dev`, `/home/dev` и фактический рабочий каталог внутри `web/`.
 
-Для GitHub создаётся **отдельный** deploy key без passphrase. Он привязан только к одной клиентской репе и создаётся независимо от пользовательского SSH-ключа Windows.
+Если ChatGPT/Codex просит авторизацию, выполнить `Sign in with ChatGPT` один раз именно для `dev`. Авторизация root не копируется и не считается общей.
 
-После добавления deploy key Codex:
+В новой Codex-сессии использовать handoff-запрос из раздела 0.1. После этой точки нормальный основной маршрут выполняется под `dev`.
 
+## 0.11. DEV-часть — GitHub и рабочая автоматизация
+
+Под `dev` Codex:
+
+- проверяет текущего пользователя и handoff-state;
+- проверяет, что bundled Codex запускается и рабочая Codex-среда видна пользователю `dev`;
+- создаёт отдельный GitHub deploy key без passphrase;
 - проверяет `ssh -T`;
 - создаёт Git metadata вне `web/`;
 - создаёт project wrapper;
@@ -223,22 +280,21 @@ pwd
 
 Если удалённая репа не пустая, Codex делает fetch и сравнение. Force-push без отдельного осознанного решения запрещён.
 
-## 0.11. Финальная приёмка
+## 0.12. Финальная приёмка
 
 Codex практически проверяет:
 
 - `dev` не может создать файл выше `web/`;
 - `dev` может создать, изменить и удалить файл внутри `web/`;
-- `www-data` пишет только в подтверждённые writable-каталоги;
 - новые объекты внутри `web/` наследуют доступ `dev`;
 - обычные файлы не получили ложный executable-бит;
-- root checkpoint работает вручную;
+- root checkpoint ранее был проверен вручную в ROOT-части;
 - GitHub-sync работает вручную;
 - повторный запуск не создаёт пустые коммиты;
 - SQLite snapshot возвращает `PRAGMA integrity_check = ok`, если SQLite используется;
 - закрытые URL возвращают 403/404;
 - публичный сайт отвечает ожидаемым HTTP status;
-- cron содержит нужные строки без дубликатов.
+- dev-cron содержит нужные строки без дубликатов.
 
 В конце создаётся `docs/server-setup-report.md` внутри фактического GitHub work tree, затем временные `client-server-guide.md`, `server-setup-state.md` и root setup scripts удаляются. После удаления выполняется финальный GitHub-sync, чтобы сам гайд гарантированно не остался в репозитории.
 
@@ -280,7 +336,9 @@ Codex практически проверяет:
 
 - может посмотреть и изменить cron любого пользователя;
 
-- создаёт локальные checkpoint-коммиты.
+- создаёт локальные checkpoint-коммиты;
+
+- выполняет первоначальную системную настройку и после handoff не используется для обычной разработки.
 
 ### dev
 `dev`:
@@ -354,6 +412,10 @@ github_repo="ivanov-web"
 
 Переменные действуют только в текущем shell-сеансе.
 
+# ЧАСТЬ I — ROOT
+
+С этого места и до явной границы `ROOT → DEV` все команды основного маршрута выполняются под `root`. Команды, которые проверяют будущего пользователя, запускаются через `runuser -u dev -- ...`.
+
 # 4. Создание dev и прав на web
 Этот раздел выполняет `root`.
 
@@ -365,7 +427,7 @@ realpath "$project_root"
 realpath "$web_root"
 ```
 
-Ожидается, что `web_root` равен ровно `project_root/web`. Если путь отличается, команды ниже сначала адаптирует программист.
+Ожидается, что `web_root` равен ровно `project_root/web`. Если путь отличается, команды ниже сначала адаптирует Codex по фактическому состоянию.
 
 ### 4.2. Пакеты
 ```bash
@@ -396,7 +458,7 @@ chown dev:dev /home/dev/.ssh/authorized_keys
 chmod 600 /home/dev/.ssh/authorized_keys
 ```
 
-До изменения production-прав пользователь практически проверяет вход под `dev`. Если вход не работает, дальнейшая настройка прав не выполняется.
+До изменения production-прав пользователь практически проверяет вход под `dev`. Если вход не работает, дальнейшая настройка прав не выполняется. После тестового входа dev-сессию закрыть и продолжить ROOT-часть под `root`.
 
 ### 4.4. Полный доступ dev внутри web без смены ownership
 
@@ -474,6 +536,107 @@ runuser -u dev -- find "$project_root" -xdev \
 - `dev` не пишет выше `web/`;
 - `www-data` пишет только в подтверждённые writable-каталоги;
 - существующие owner/group/mode не были массово переписаны.
+
+## 4.7. Практическая проверка прав до выхода из root
+
+До перехода в DEV-часть root обязан проверить ограничения на практике:
+
+```bash
+if runuser -u dev -- test -w "$project_root"; then
+    echo "ERROR: dev can write project root"
+else
+    echo "OK: dev cannot write project root"
+fi
+
+if runuser -u dev -- test -w "$web_root"; then
+    echo "OK: dev can write web"
+else
+    echo "ERROR: dev cannot write web"
+fi
+
+if runuser -u dev -- touch "$project_root/.dev-write-test"; then
+    rm -f "$project_root/.dev-write-test"
+    echo "ERROR: dev created a file above web"
+else
+    echo "OK: write above web was rejected"
+fi
+
+runuser -u dev -- touch "$web_root/.dev-write-test"
+rm -f "$web_root/.dev-write-test"
+echo "OK: write inside web works"
+```
+
+Здесь же Codex проверяет ACL/default ACL и реальный доступ `www-data` к подтверждённым writable-каталогам. Если для защиты `private/`, `.git-snapshots/` или живой базы требуется изменение Apache VirtualHost/`AllowOverride`, это системное изменение выполняется **сейчас, в ROOT-части**, затем:
+
+```bash
+apachectl configtest
+systemctl reload apache2
+```
+
+После перехода под `dev` нормальный маршрут не должен требовать возврата в root ради Apache.
+
+## 4.8. Предустановка bundled Codex SDK для dev
+
+VS Code Remote SSH хранит bundled Codex SDK отдельно в home каждого удалённого Linux-пользователя. Если remote-загрузка SDK на сервере ненадёжна, не нужно ждать повторной неудачной загрузки под `dev`: рабочую версию, которой уже пользуется root-сессия, заранее копируем в cache `dev`.
+
+Это **только SDK/binary cache**. ChatGPT-авторизация, `auth.json` и другие credentials между root и dev не копируются.
+
+Под `root`:
+
+```bash
+set -Eeuo pipefail
+
+root_codex_cache="/root/.vscode-server/data/agent-host/sdk-cache/codex"
+dev_codex_cache="/home/dev/.vscode-server/data/agent-host/sdk-cache/codex"
+
+if [ ! -d "$root_codex_cache" ]; then
+    echo "ERROR: root Codex SDK cache not found: $root_codex_cache" >&2
+    exit 1
+fi
+
+install -d -m 755 -o dev -g dev "$dev_codex_cache"
+
+copied=0
+for src in "$root_codex_cache"/*; do
+    [ -d "$src" ] || continue
+
+    bin="$src/linux-x64/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
+    [ -x "$bin" ] || continue
+
+    version="$(basename "$src")"
+    dst="$dev_codex_cache/$version"
+
+    rm -rf "$dst"
+    cp -a "$src" "$dst"
+    chown -R dev:dev "$dst"
+
+    dev_bin="$dst/linux-x64/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex"
+    echo "=== Codex $version for dev ==="
+    runuser -u dev -- "$dev_bin" --version
+    copied=1
+done
+
+if [ "$copied" -ne 1 ]; then
+    echo "ERROR: no complete executable Codex SDK found in root cache" >&2
+    exit 1
+fi
+```
+
+Нормальный результат — хотя бы одна строка вида:
+
+```text
+codex-cli X.Y.Z
+```
+
+Команда намеренно не хардкодит текущую версию Codex: она копирует все полноценные версии из root SDK cache и игнорирует пустые/недокачанные каталоги.
+
+Если root-cache сам не содержит рабочей версии, сначала исправляется Codex под root. Пустой каталог версии размером несколько килобайт не считается установленным SDK.
+
+## 4.9. Общая среда Codex: Superpowers + глобальный AGENTS.md
+
+Этот шаг относится к ROOT-части и должен выполняться **до** окончательного переключения на `dev`: общая серверная установка Superpowers и общий глобальный `AGENTS.md` должны быть доступны и root, и dev без отдельных копий на каждого пользователя.
+
+Конкретный единый bootstrap этой части фиксируется отдельно. Пока он не утверждён в этом гайде, Codex не должен импровизировать с разными копиями Superpowers/AGENTS для root и dev. Перед handoff требуется использовать актуальную согласованную серверную схему.
 
 # 5. Локальный Git всего проекта
 Этот контур принадлежит `root`, не имеет remote и служит быстрым checkpoint на том же сервере.
@@ -553,7 +716,61 @@ chmod 750 /usr/local/sbin/ivanov-local-checkpoint.sh
 12 * * * * /usr/local/sbin/ivanov-local-checkpoint.sh >>/var/log/ivanov-local-checkpoint.log 2>&1
 ```
 
-## 6. Приватная GitHub-репа
+Перед выходом из root повторно запустить checkpoint-скрипт и проверить `crontab -l`.
+
+## 5.3. Handoff-файлы перед закрытием root-сессии
+
+Создать безопасный временный каталог для продолжения под `dev`:
+
+```bash
+install -d -m 700 -o dev -g dev /home/dev/.server-setup
+```
+
+Туда помещаются текущая копия этого гайда и `server-setup-state.md` с несекретными результатами ROOT-части. Оба файла должны принадлежать `dev:dev` и иметь режим `600`.
+
+State должен как минимум содержать:
+
+```text
+phase=DEV
+root_phase=completed
+project_root=...
+web_root=...
+github_work_tree=...
+client_slug=...
+github_repo=...
+codex_sdk_for_dev=verified
+```
+
+Не записывать туда токены, пароли, private keys и webhook secrets.
+
+# ГРАНИЦА ROOT → DEV
+
+На этом основной ROOT-блок заканчивается.
+
+Не держать root Remote SSH открытым «на всякий случай». Пользователь полностью закрывает root connection и открывает новое VS Code Remote SSH connection под `dev`. В новой сессии продолжение начинается только с DEV-части ниже.
+
+# ЧАСТЬ II — DEV
+
+С этого места все команды нормального маршрута выполняются непосредственно под `dev`, без `runuser -u dev --`. Если какой-то шаг внезапно требует root, Codex останавливается и объясняет причину, а не молча смешивает две сессии.
+
+Первые команды новой сессии:
+
+```bash
+whoami
+echo "$HOME"
+pwd
+```
+
+Ожидается:
+
+```text
+dev
+/home/dev
+```
+
+Если Codex просит вход в ChatGPT, выполнить его один раз для пользователя `dev`. После входа проверить, что Codex отвечает и видит рабочую среду пользователя `dev`.
+
+# 6. Приватная GitHub-репа
 
 GitHub сохраняет `github_work_tree`. На новом типовом сервере это весь `web_root`. На уже работающем сервере с подтверждённым более узким scope используется именно он.
 
@@ -561,16 +778,17 @@ GitHub сохраняет `github_work_tree`. На новом типовом с�
 
 Для каждого клиента создаётся отдельный серверный SSH deploy key. Он привязан только к одной GitHub-репе и не является пользовательским ключом для входа на сервер.
 
-Под `root`:
+Под `dev`:
 
 ```bash
-install -d -m 700 -o dev -g dev /home/dev/.ssh
-runuser -u dev -- ssh-keygen \
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+ssh-keygen \
     -t ed25519 \
     -N "" \
     -C "ivanov GitHub deploy key" \
-    -f /home/dev/.ssh/id_ed25519_ivanov_github
-cat /home/dev/.ssh/id_ed25519_ivanov_github.pub
+    -f ~/.ssh/id_ed25519_ivanov_github
+cat ~/.ssh/id_ed25519_ivanov_github.pub
 ```
 
 Публичную часть добавить:
@@ -592,14 +810,13 @@ Host github-ivanov
 Права:
 
 ```bash
-chown dev:dev /home/dev/.ssh/config
-chmod 600 /home/dev/.ssh/config
+chmod 600 ~/.ssh/config
 ```
 
 Проверка:
 
 ```bash
-runuser -u dev -- ssh -T github-ivanov
+ssh -T github-ivanov
 ```
 
 Сообщение GitHub об успешной аутентификации при отсутствии shell-доступа считается нормальным.
@@ -609,8 +826,9 @@ runuser -u dev -- ssh -T github-ivanov
 Создать каталоги:
 
 ```bash
-install -d -m 700 -o dev -g dev /home/dev/.gitdirs
-install -d -m 755 -o dev -g dev /home/dev/.local/bin
+mkdir -p /home/dev/.gitdirs /home/dev/.local/bin
+chmod 700 /home/dev/.gitdirs
+chmod 755 /home/dev/.local/bin
 ```
 
 Пример переменных:
@@ -625,12 +843,11 @@ github_git_dir="/home/dev/.gitdirs/ivanov-web"
 Инициализация:
 
 ```bash
-runuser -u dev -- git \
+git \
     --git-dir="$github_git_dir" \
     --work-tree="$github_work_tree" \
     init -b main
 chmod 700 "$github_git_dir"
-chown -R dev:dev "$github_git_dir"
 ```
 
 Создать wrapper `/home/dev/.local/bin/ivanov-git` с **фактическим** work tree:
@@ -648,11 +865,10 @@ exec git \
 Права и настройки:
 
 ```bash
-chown dev:dev /home/dev/.local/bin/ivanov-git
 chmod 755 /home/dev/.local/bin/ivanov-git
-runuser -u dev -- /home/dev/.local/bin/ivanov-git config user.name "Evgeny"
-runuser -u dev -- /home/dev/.local/bin/ivanov-git config user.email "server@client.example.ru"
-runuser -u dev -- /home/dev/.local/bin/ivanov-git remote add origin git@github-ivanov:YOUR_GITHUB_LOGIN/ivanov-web.git
+/home/dev/.local/bin/ivanov-git config user.name "Evgeny"
+/home/dev/.local/bin/ivanov-git config user.email "server@client.example.ru"
+/home/dev/.local/bin/ivanov-git remote add origin git@github-ivanov:YOUR_GITHUB_LOGIN/ivanov-web.git
 ```
 
 Для этой репы используется wrapper, а не обычный `git`:
@@ -735,30 +951,11 @@ Options -Indexes
 Require all denied
 ```
 
-Apache 2.4 использует `Require all denied` для полного запрета доступа. Правила можно разместить в `.htaccess` либо, что надёжнее при доступе программиста к Apache, в `<Directory>` конфигурации VirtualHost: [Apache access control](https://httpd.apache.org/docs/2.4/howto/access.html).
+Apache 2.4 использует `Require all denied` для полного запрета доступа. Правила можно разместить в `.htaccess` либо в `<Directory>` конфигурации VirtualHost: [Apache access control](https://httpd.apache.org/docs/2.4/howto/access.html).
 
-Пример VirtualHost:
+Если для этого сервера требовалась правка VirtualHost или `AllowOverride`, она должна была быть сделана и проверена в ROOT-части до handoff. В DEV-части Codex не возвращается в root только ради этого шага.
 
-```apache
-<Directory "/var/www/client.example.ru/web/private">
-    Require all denied
-</Directory>
-<Directory "/var/www/client.example.ru/web/.git-snapshots">
-    Require all denied
-</Directory>
-<Directory "/var/www/client.example.ru/web/data">
-    Require all denied
-</Directory>
-```
-
-После изменения VirtualHost:
-
-```bash
-apachectl configtest
-systemctl reload apache2
-```
-
-Проверка извне:
+Проверка извне под `dev`:
 
 ```bash
 curl -I https://client.example.ru/private/secrets.php
@@ -767,6 +964,8 @@ curl -I https://client.example.ru/data/app.sqlite
 ```
 
 Ожидается `403 Forbidden` или `404 Not Found`, но не `200 OK`.
+
+Если неожиданно получен `200`, остановиться и показать пользователю проблему. Не продолжать GitHub-sync с незащищённым секретным/DB-путём.
 
 ## 9. Безопасный snapshot SQLite
 
@@ -829,28 +1028,27 @@ fi
 
 Путь каждой живой базы обязательно исключить в `.gitignore`; в Git попадает только snapshot.
 
-Sync-скрипт принадлежит `dev` и имеет режим `750`:
+Sync-скрипт создаётся под `dev` и имеет режим `750`:
 
 ```bash
-chown dev:dev "/фактический/github_work_tree/ops/github-sync.sh"
 chmod 750 "/фактический/github_work_tree/ops/github-sync.sh"
 ```
 
 ## 10. Первый GitHub push и dev-cron
 
-Первый sync запускается вручную от `dev` по **фактическому абсолютному пути** скрипта.
+Первый sync запускается вручную под `dev` по **фактическому абсолютному пути** скрипта.
 
 Стандартный пример:
 
 ```bash
-runuser -u dev -- /var/www/client.example.ru/web/ops/github-sync.sh
+/var/www/client.example.ru/web/ops/github-sync.sh
 ```
 
 После запуска:
 
 ```bash
-runuser -u dev -- /home/dev/.local/bin/ivanov-git status
-runuser -u dev -- /home/dev/.local/bin/ivanov-git log -3 --oneline
+/home/dev/.local/bin/ivanov-git status
+/home/dev/.local/bin/ivanov-git log -3 --oneline
 ```
 
 На новом типовом сервере в GitHub должна появиться вся структура `web/` согласно `.gitignore`. На legacy-сервере с подтверждённым узким scope — только этот scope.
@@ -863,63 +1061,62 @@ Dev-cron содержит абсолютный путь фактического
 
 Для узкого legacy-scope путь меняется соответственно. Перед добавлением строки сохраняется существующий crontab и проверяется отсутствие дубликата.
 
-## 11. Финальная проверка
-### 11.1. Права
-Под root:
+## 11. Финальная проверка под dev
+
+ROOT-проверки (`www-data`, Apache configtest, root checkpoint, root-cron) уже выполнены до handoff и в нормальном маршруте здесь не повторяются.
+
+### 11.1. Права текущего пользователя
+
+Под `dev`:
 
 ```bash
-if runuser -u dev -- test -w "$project_root"; then
+if test -w "$project_root"; then
     echo "ERROR: dev can write project root"
 else
     echo "OK: dev cannot write project root"
 fi
-if runuser -u dev -- test -w "$web_root"; then
+
+if test -w "$web_root"; then
     echo "OK: dev can write web"
 else
     echo "ERROR: dev cannot write web"
 fi
-```
 
-Практический тест:
-
-```bash
-if runuser -u dev -- touch "$project_root/.dev-write-test"; then
+if touch "$project_root/.dev-write-test" 2>/dev/null; then
     rm -f "$project_root/.dev-write-test"
     echo "ERROR: dev created a file above web"
 else
     echo "OK: write above web was rejected"
 fi
-runuser -u dev -- touch "$web_root/.dev-write-test"
+
+touch "$web_root/.dev-write-test"
 rm -f "$web_root/.dev-write-test"
 echo "OK: write inside web works"
 ```
 
-Дополнительно Codex проверяет ACL и наследование на практике: создаёт тестовые файл и каталог от имени `www-data` внутри одного подтверждённого writable-каталога, убеждается, что `dev` может их изменить и удалить, затем полностью удаляет тестовые объекты. Обычные файлы после настройки не должны неожиданно получить executable-бит.
+Обычные файлы после настройки не должны неожиданно получить executable-бит.
 
-Также проверяется, что `www-data` может писать только в список подтверждённых writable-каталогов, а в остальных каталогах `web/` запись запрещена.
+### 11.2. GitHub-контур
 
-### 11.2. Git
 ```bash
-# root
-git -C "$project_root" status --short
-/usr/local/sbin/ivanov-local-checkpoint.sh
-# GitHub-контур от dev
-runuser -u dev -- /home/dev/.local/bin/ivanov-git status
-runuser -u dev -- /var/www/client.example.ru/web/ops/github-sync.sh
+/home/dev/.local/bin/ivanov-git status
+/var/www/client.example.ru/web/ops/github-sync.sh
+/home/dev/.local/bin/ivanov-git status
 ```
 
-Обе команды после повторного запуска должны сообщить, что изменений нет, и не создавать пустые коммиты.
+Повторный запуск должен сообщить, что изменений нет, и не создавать пустой commit.
 
 ### 11.3. Cron
+
 ```bash
 systemctl is-active cron
 crontab -l
-crontab -u dev -l
 ```
 
-Root должен видеть собственный local-checkpoint. Через `crontab -u dev -l` он видит GitHub checkpoint и остальные проектные задания `dev`.
+В текущей dev-сессии `crontab -l` должен содержать GitHub checkpoint и остальные проектные задания `dev`. Root-cron уже был проверен до handoff.
 
 ### 11.4. SQLite и HTTP
+
 ```bash
 sqlite3 "$web_root/.git-snapshots/sqlite/app.sqlite" 'PRAGMA integrity_check;'
 ```
@@ -953,10 +1150,10 @@ du -sh /var/www/client.example.ru/.git
 Если небольшая SQLite-база или uploads начинают заметно раздувать историю, их стратегию пересматривают отдельно. Для маленького клиентского сайта преждевременно усложнять схему не нужно.
 
 ## 13. Если что-то не работает
-### GitHub push
+### GitHub push — под dev
 ```bash
-runuser -u dev -- ssh -T github-ivanov
-runuser -u dev -- /home/dev/.local/bin/ivanov-git status
+ssh -T github-ivanov
+/home/dev/.local/bin/ivanov-git status
 tail -n 100 /var/www/client.example.ru/web/private/github-sync.log
 ```
 
@@ -972,7 +1169,12 @@ tail -n 100 /var/www/client.example.ru/web/private/github-sync.log
 
 - GitHub-репа не содержит отдельной несовместимой истории.
 
-### Локальный checkpoint
+### Локальный checkpoint — требует root
+
+Эта диагностика не является частью обычной DEV-сессии. Если реально сломан root checkpoint, закрыть dev Remote SSH и открыть отдельное root-подключение.
+
+Под root:
+
 ```bash
 /usr/local/sbin/ivanov-local-checkpoint.sh
 git -C /var/www/client.example.ru status --short
@@ -982,19 +1184,37 @@ tail -n 100 /var/log/ivanov-local-checkpoint.log
 Этот скрипт должен запускаться root. `dev` не должен иметь доступ к родительскому `.git`.
 
 ### Права сайта
+
+Базовую диагностику под `dev` можно начать с:
+
 ```bash
 namei -l /var/www/client.example.ru/web
 getfacl /var/www/client.example.ru/web
 find /var/www/client.example.ru/web -xdev -type f -perm /111 -print
-runuser -u www-data -- test -r /var/www/client.example.ru/web/index.php
 ```
 
-После изменения Apache:
+Проверка от имени `www-data` и изменение Apache требуют root. Если они действительно нужны, это отдельная root-диагностика, а не продолжение обычного DEV-маршрута.
+
+Под root после изменения Apache:
 
 ```bash
+runuser -u www-data -- test -r /var/www/client.example.ru/web/index.php
 apachectl configtest
 systemctl reload apache2
 ```
+
+### Codex под dev не запускается после переключения
+
+Сначала проверить, что cache действительно содержит полноценный binary:
+
+```bash
+find ~/.vscode-server/data/agent-host/sdk-cache/codex \
+    -type f \
+    -path '*/linux-x64/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex' \
+    -ls
+```
+
+Если каталоги версий есть, но `bin/codex` отсутствует, это недокачанный cache. В нормальной новой установке он должен был быть заменён рабочей root-копией в разделе 4.8. Не считать пустой каталог успешной установкой.
 
 ## 14. Восстановление после ошибки
 ### Случайно испорчен файл внутри web
@@ -1038,6 +1258,14 @@ GitHub вернёт содержимое фактического `github_work_t
 - [ ] Root checkpoint-скрипт работает вручную.
 
 - [ ] Root-cron содержит почасовой checkpoint.
+
+- [ ] Рабочий bundled Codex SDK заранее скопирован из root-cache в `/home/dev/.vscode-server/.../sdk-cache/codex/` и проверен запуском от `dev`.
+
+- [ ] ChatGPT credentials root не копировались; `dev` авторизован отдельно.
+
+- [ ] Общая серверная Codex-среда (Superpowers + глобальный AGENTS.md) подключена к root и dev по единой схеме.
+
+- [ ] ROOT-часть закончена до начала основной DEV-части; root Remote SSH не остаётся рабочей сессией для обычной разработки.
 
 - [ ] Создана отдельная приватная GitHub-репа клиента.
 
