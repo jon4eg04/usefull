@@ -1,3 +1,76 @@
+# ПЕРЕД СТАРТОМ — РУЧНОЙ БЛОК ДЛЯ ЖЕНИ
+
+> Этот блок выполняется человеком вручную **до начала работы Codex по гайду**. Для самого Codex это не рабочий этап: если агент уже запущен и читает этот файл, считать блок выполненным и не запускать его повторно.
+
+При первом подключении VS Code Remote SSH к новому серверу под `root` дать VS Code один раз попытаться скачать bundled Codex SDK. Если загрузка зависла/упала и Codex не запускается, открыть терминал **под root** и выполнить весь блок ниже.
+
+Скрипт берёт версию из каталога, который уже создал VS Code, скачивает соответствующие npm-архивы Codex напрямую и раскладывает их в ожидаемый SDK cache. Версия не захардкожена.
+
+```bash
+set -Eeuo pipefail
+
+CACHE="/root/.vscode-server/data/agent-host/sdk-cache/codex"
+
+VERSION="$(
+    find "$CACHE" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null \
+    | sort -V \
+    | tail -n1
+)"
+
+if [ -z "$VERSION" ]; then
+    echo "ERROR: Codex version directory not found in $CACHE" >&2
+    exit 1
+fi
+
+if [ "$(uname -m)" != "x86_64" ]; then
+    echo "ERROR: this bootstrap is for Linux x86_64; detected: $(uname -m)" >&2
+    exit 1
+fi
+
+echo "Installing Codex SDK $VERSION for root..."
+
+BASE="$CACHE/$VERSION/linux-x64"
+ROOT_PKG="$BASE/node_modules/@openai/codex"
+PLATFORM_PKG="$BASE/node_modules/@openai/codex-linux-x64"
+
+rm -rf "$BASE"
+mkdir -p "$ROOT_PKG" "$PLATFORM_PKG"
+
+curl -fL \
+  "https://registry.npmjs.org/@openai/codex/-/codex-${VERSION}.tgz" \
+  | tar -xz -C "$ROOT_PKG" --strip-components=1
+
+curl -fL \
+  "https://registry.npmjs.org/@openai/codex/-/codex-${VERSION}-linux-x64.tgz" \
+  | tar -xz -C "$PLATFORM_PKG" --strip-components=1
+
+BIN="$PLATFORM_PKG/vendor/x86_64-unknown-linux-musl/bin/codex"
+
+echo
+echo "=== SIZE ==="
+du -sh "$CACHE/$VERSION"
+
+echo
+echo "=== VERSION ==="
+"$BIN" --version
+```
+
+Нормальный финал:
+
+```text
+codex-cli X.Y.Z
+```
+
+После успешной установки выполнить в VS Code:
+
+```text
+Developer: Reload Window
+```
+
+Затем войти через `Sign in with ChatGPT`. Когда Codex заработал, уже дать ему этот гайд и начать основной маршрут ниже.
+
+---
+
 # Типовой сервер для работы через VS Code и Codex
 Этот документ описывает повторяемую настройку клиентского сервера под простой рабочий процесс:
 
