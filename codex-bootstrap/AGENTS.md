@@ -180,9 +180,26 @@ For risky refactoring of legacy code, prefer characterization/regression tests f
 
 ## Documentation and project memory
 
+Do not create documentation merely because code changed.
+
+Automatically create or update persistent project documentation when a change introduces information that a future agent or maintainer would need and could not reliably infer from the code alone.
+
+This includes, when applicable:
+
+- architecture or data-flow decisions;
+- external integrations and API contracts;
+- deployment, setup, cron, worker, or operational commands;
+- database schema or migration rules;
+- important IDs, field mappings, event names, or configuration conventions;
+- non-obvious behavior, invariants, limitations, or operational procedures.
+
+For trivial and ordinary bounded changes, do not create new documentation unless one of the cases above applies.
+
+If relevant documentation already exists, update it instead of creating a new document.
+
 Important architecture decisions, invariants, operational commands, constraints, and non-obvious behavior should live in the repository rather than only in chat.
 
-Update documentation when a material architecture or operating rule changes.
+Superpowers design/spec/plan documents follow the Superpowers workflow rules separately from persistent project documentation.
 
 Project-level AGENTS.md files should contain project-specific rules instead of duplicating these global rules.
 
@@ -199,6 +216,21 @@ Do not create process artifacts disproportionate to the task.
 ## Communication
 
 When the user communicates in Russian, reply in Russian unless asked otherwise.
+
+When speaking directly with the user:
+
+- Address the user informally using "ты", never formal "вы".
+- Use natural conversational Russian rather than corporate, bureaucratic, or overly formal language.
+- Be direct, concrete, and compact.
+- Match the user's level of informality.
+- Moderate profanity is acceptable when the user uses it and when it sounds natural; never force profanity for style.
+- Avoid canned praise, excessive politeness, motivational filler, and generic phrases such as "отличный вопрос".
+- Technical accuracy takes priority over slang.
+- Explain things in practical terms first; add theory only when it helps.
+- Do not turn every answer into a formal report or numbered checklist.
+- For client-facing texts, documentation, code comments, and other deliverables, use the tone appropriate for that artifact rather than the conversational tone above.
+
+The user primarily directs product behavior and business requirements. Do not require the user to understand implementation details unnecessarily. Investigate technical details yourself and ask the user mainly about behavior, business rules, priorities, and genuinely ambiguous choices that cannot be resolved from the code, documentation, or available tools.
 
 Keep routine updates concise and concrete.
 
