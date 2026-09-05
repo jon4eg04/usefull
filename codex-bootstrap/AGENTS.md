@@ -61,15 +61,16 @@ Add a regression test when practical.
 
 Examples: new subsystems, major refactors, public interfaces/data formats, database migrations, authentication/security, large blast radius, or hard-to-reverse changes.
 
-Use the full Superpowers workflow as appropriate:
+Use the Superpowers workflow as appropriate, but scale the depth of artifacts to the actual code surface and risk. High risk does not automatically justify a long spec or implementation plan.
 
-- clarify requirements;
-- consider alternatives;
-- produce a design;
+- clarify requirements and success criteria;
+- consider alternatives when there is a real design choice;
+- produce a concise design/spec that captures the important behavior, invariants, risks, and acceptance tests;
 - obtain approval where the workflow requires it;
-- write an implementation plan;
+- if the same agent will immediately implement a contained change, prefer a short execution checklist over a large implementation-plan document;
+- use a detailed implementation plan when the work is broad, spans multiple independent components, will be delegated across agents/sessions, or a detailed handoff artifact materially reduces risk;
 - implement incrementally;
-- use tests;
+- use meaningful tests;
 - review;
 - verify.
 
@@ -178,6 +179,8 @@ Strict test-first is not required for:
 
 For risky refactoring of legacy code, prefer characterization/regression tests first.
 
+Prefer targeted tests after local changes. Run the full regression suite at meaningful integration milestones, before merge/deployment, after changes with broad blast radius, and after substantial bug fixes. Do not rerun unrelated tests merely because any file changed.
+
 ## Documentation and project memory
 
 Do not create documentation merely because code changed.
@@ -199,7 +202,7 @@ If relevant documentation already exists, update it instead of creating a new do
 
 Important architecture decisions, invariants, operational commands, constraints, and non-obvious behavior should live in the repository rather than only in chat.
 
-Superpowers design/spec/plan documents follow the Superpowers workflow rules separately from persistent project documentation.
+Superpowers design/spec/plan documents follow the Superpowers workflow rules subject to the task-sizing and process-cost rules in this file. Do not create both a long spec and a long plan when one concise approved artifact plus an execution checklist is sufficient.
 
 Project-level AGENTS.md files should contain project-specific rules instead of duplicating these global rules.
 
@@ -212,6 +215,21 @@ Start with the relevant files, callers, dependencies, tests, and documentation; 
 Avoid repeated explanations and unnecessarily long implementation reports.
 
 Do not create process artifacts disproportionate to the task.
+
+## Process cost control
+
+Treat model context, repeated reviews, and repeated verification as finite resources. Spend them where they materially reduce risk.
+
+- Keep specs and plans concise relative to the actual task. Prefer requirements, invariants, risks, acceptance criteria, and a short execution checklist over exhaustive prose.
+- Do not reread the same Superpowers skill repeatedly during one continuous phase unless context was lost, the workflow changed, or the exact instructions are genuinely needed again.
+- After a local code change, run the narrowest meaningful tests first.
+- Do not rerun a full suite after every small change. Use full-suite runs at meaningful integration milestones, before merge/deployment, after broad changes, and after substantial bug fixes.
+- Do not rerun unrelated tests only because another component changed.
+- Do not repeat `git status`, `git diff`, `git diff --check`, syntax checks, or equivalent inspections without a concrete reason. Keep the checks that establish a clean baseline, protect a commit/merge/deploy boundary, or investigate a real issue.
+- Independent subagents/reviewers are not the default for bounded work or contained high-risk work. Use them when an independent context materially reduces risk, such as security-sensitive changes, difficult migrations, broad cross-component changes, subtle concurrency, ambiguous architecture, or high-cost failure modes.
+- Do not add multi-agent ceremony merely because the framework supports it.
+- Do not remove worktrees, backups, migration verification, idempotency checks, security checks, or live smoke tests merely to save tokens when those controls address real risks in the task.
+- If a diagnostic branch is based on an uncertain hypothesis, verify the underlying evidence before changing production code or expanding the test suite around that hypothesis.
 
 ## Communication
 
