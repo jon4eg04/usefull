@@ -707,9 +707,55 @@ codex-cli X.Y.Z
 
 ## 4.9. Общая среда Codex: Superpowers + глобальный AGENTS.md
 
-Этот шаг относится к ROOT-части и должен выполняться **до** окончательного переключения на `dev`: общая серверная установка Superpowers и общий глобальный `AGENTS.md` должны быть доступны и root, и dev без отдельных копий на каждого пользователя.
+Этот шаг выполняется под `root` после создания пользователя `dev` и до окончательного переключения на DEV-часть. Источник bootstrap и глобального `AGENTS.md` хранится в публичном репозитории `jon4eg04/usefull`, каталог `codex-bootstrap/`.
 
-Конкретный единый bootstrap этой части фиксируется отдельно. Пока он не утверждён в этом гайде, Codex не должен импровизировать с разными копиями Superpowers/AGENTS для root и dev. Перед handoff требуется использовать актуальную согласованную серверную схему.
+Архитектура одна на весь сервер:
+
+```text
+/opt/superpowers/                         root-owned общая установка Superpowers
+/etc/codex/AGENTS.md                     root-owned общий глобальный AGENTS.md
+/root/.agents/skills/superpowers         -> /opt/superpowers/skills
+/home/dev/.agents/skills/superpowers     -> /opt/superpowers/skills
+/root/.codex/AGENTS.md                   -> /etc/codex/AGENTS.md
+/home/dev/.codex/AGENTS.md               -> /etc/codex/AGENTS.md
+```
+
+ChatGPT credentials, `auth.json`, Codex sessions и прочее пользовательское состояние не объединяются. Общими являются только Superpowers skills и глобальный `AGENTS.md`.
+
+Superpowers не берётся с плавающего `main`: bootstrap использует заранее проверенный release, зафиксированный в `SUPERPOWERS_REF` внутри `codex-bootstrap/install.sh`. Обновление на новый release делается осознанно отдельным изменением этого значения после проверки upstream release notes.
+
+Запуск — одной командой под `root`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jon4eg04/usefull/main/codex-bootstrap/install.sh | bash
+```
+
+Installer обязан самостоятельно:
+
+- убедиться, что он запущен от root и пользователь `dev` уже существует;
+- установить Git, если его ещё нет;
+- установить или привести `/opt/superpowers` к зафиксированному release, не удаляя неизвестный каталог и не затирая локальные изменения;
+- скачать текущий `codex-bootstrap/AGENTS.md` во временный файл, проверить его и только потом атомарно заменить `/etc/codex/AGENTS.md`;
+- создать native skill symlink и AGENTS symlink для `root` и `dev`;
+- не копировать и не шарить credentials;
+- проверить чтение `using-superpowers/SKILL.md` и `AGENTS.md` от имени обоих пользователей;
+- вывести фактический Superpowers ref/commit и SHA256 установленного `AGENTS.md`.
+
+Скрипт рассчитан на повторный запуск. Правильные ссылки и текущая установка остаются рабочими. Если на управляемом пути найден настоящий файл/каталог, который bootstrap не имеет права молча удалить, либо `/opt/superpowers` содержит неожиданный origin или локальные изменения, installer останавливается с ошибкой вместо разрушительного исправления.
+
+Нормальный финал выглядит так:
+
+```text
+=== CODEX ENVIRONMENT READY ===
+Superpowers ref:    vX.Y.Z
+Superpowers commit: ...
+AGENTS.md SHA256:   ...
+
+root: OK
+dev:  OK
+```
+
+После такого финала отдельные команды `git clone`, `ln -s` и ручное копирование `AGENTS.md` не нужны. После handoff достаточно перезагрузить VS Code / открыть новый Codex chat под `dev` и один раз выполнить ChatGPT login для `dev`, если он ещё не выполнен.
 
 # 5. Локальный Git всего проекта
 Этот контур принадлежит `root`, не имеет remote и служит быстрым checkpoint на том же сервере.
