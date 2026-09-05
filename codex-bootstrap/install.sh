@@ -10,100 +10,18 @@ AGENTS_URL="$BOOTSTRAP_BASE_URL/AGENTS.md"
 AGENTS_DIR="/etc/codex"
 AGENTS_FILE="$AGENTS_DIR/AGENTS.md"
 
+tmp_agents=""
+
+cleanup() {
+    if [ -n "${tmp_agents:-}" ]; then
+        rm -f -- "$tmp_agents"
+    fi
+}
+
 die() {
     echo "ERROR: $*" >&2
     exit 1
 }
-
-if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-    die "run this installer as root"
-fi
-
-command -v curl >/dev/null 2>&1 || die "curl is required"
-command -v getent >/dev/null 2>&1 || die "getent is required"
-command -v runuser >/dev/null 2>&1 || die "runuser is required"
-
-if ! id dev >/dev/null 2>&1; then
-    die "user 'dev' does not exist yet; create dev first, then rerun this installer"
-fi
-
-if ! command -v git >/dev/null 2>&1; then
-    echo "Git not found; installing git..."
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update
-    apt-get install -y git ca-certificates
-fi
-
-echo "=== Superpowers ==="
-
-if [ -e "$SUPERPOWERS_DIR" ] && [ ! -d "$SUPERPOWERS_DIR/.git" ]; then
-    die "$SUPERPOWERS_DIR exists but is not the expected Git repository; nothing was removed"
-fi
-
-if [ ! -e "$SUPERPOWERS_DIR" ]; then
-    git clone --branch "$SUPERPOWERS_REF" --depth 1 "$SUPERPOWERS_REPO" "$SUPERPOWERS_DIR"
-else
-    origin_url="$(git -C "$SUPERPOWERS_DIR" remote get-url origin 2>/dev/null || true)"
-    case "$origin_url" in
-        "$SUPERPOWERS_REPO"|"https://github.com/obra/superpowers"|"git@github.com:obra/superpowers.git")
-            ;;
-        *)
-            die "$SUPERPOWERS_DIR has unexpected origin: ${origin_url:-<none>}; nothing was changed"
-            ;;
-    esac
-
-    if [ -n "$(git -C "$SUPERPOWERS_DIR" status --porcelain --untracked-files=all)" ]; then
-        die "$SUPERPOWERS_DIR has local changes; refusing to overwrite them"
-    fi
-
-    if ! git -C "$SUPERPOWERS_DIR" rev-parse -q --verify "refs/tags/$SUPERPOWERS_REF" >/dev/null 2>&1; then
-        git -C "$SUPERPOWERS_DIR" fetch --depth 1 origin "refs/tags/$SUPERPOWERS_REF:refs/tags/$SUPERPOWERS_REF"
-    fi
-
-    current_commit="$(git -C "$SUPERPOWERS_DIR" rev-parse HEAD)"
-    target_commit="$(git -C "$SUPERPOWERS_DIR" rev-list -n 1 "$SUPERPOWERS_REF")"
-
-    if [ "$current_commit" != "$target_commit" ]; then
-        git -C "$SUPERPOWERS_DIR" checkout --detach "$SUPERPOWERS_REF"
-    fi
-fi
-
-test -f "$SUPERPOWERS_DIR/skills/using-superpowers/SKILL.md" \
-    || die "Superpowers installation is incomplete: using-superpowers/SKILL.md not found"
-
-chown -R root:root "$SUPERPOWERS_DIR"
-chmod -R go-w "$SUPERPOWERS_DIR"
-
-echo "Superpowers ready at $SUPERPOWERS_DIR ($SUPERPOWERS_REF)"
-
-echo
-echo "=== Global AGENTS.md ==="
-
-install -d -m 755 -o root -g root "$AGENTS_DIR"
-tmp_agents="$(mktemp "$AGENTS_DIR/.AGENTS.md.XXXXXX")"
-trap 'rm -f "$tmp_agents"' EXIT
-
-curl -fsSL "$AGENTS_URL" -o "$tmp_agents"
-
-agents_size="$(wc -c < "$tmp_agents")"
-if [ "$agents_size" -lt 1000 ]; then
-    die "downloaded AGENTS.md is unexpectedly small: ${agents_size} bytes"
-fi
-
-grep -Fqx '# Global Codex Working Rules' "$tmp_agents" \
-    || die "downloaded AGENTS.md failed identity check"
-
-chown root:root "$tmp_agents"
-chmod 0644 "$tmp_agents"
-
-if [ -e "$AGENTS_FILE" ] && [ ! -f "$AGENTS_FILE" ]; then
-    die "$AGENTS_FILE exists but is not a regular file"
-fi
-
-mv -f "$tmp_agents" "$AGENTS_FILE"
-trap - EXIT
-
-echo "AGENTS.md ready at $AGENTS_FILE"
 
 ensure_user_dir() {
     local user="$1"
@@ -168,14 +86,6 @@ setup_user() {
     echo "$user links ready"
 }
 
-echo
-echo "=== User links ==="
-setup_user root
-setup_user dev
-
-echo
-echo "=== Verification ==="
-
 verify_user() {
     local user="$1"
     local home skills_link agents_link
@@ -199,19 +109,132 @@ verify_user() {
     echo "$user: OK"
 }
 
-verify_user root
-verify_user dev
+install_superpowers() {
+    echo "=== Superpowers ==="
 
-superpowers_commit="$(git -C "$SUPERPOWERS_DIR" rev-parse --short=12 HEAD)"
-agents_sha256="$(sha256sum "$AGENTS_FILE" | awk '{print $1}')"
+    if [ -e "$SUPERPOWERS_DIR" ] && [ ! -d "$SUPERPOWERS_DIR/.git" ]; then
+        die "$SUPERPOWERS_DIR exists but is not the expected Git repository; nothing was removed"
+    fi
 
-echo
-echo "=== CODEX ENVIRONMENT READY ==="
-echo "Superpowers ref:    $SUPERPOWERS_REF"
-echo "Superpowers commit: $superpowers_commit"
-echo "AGENTS.md SHA256:   $agents_sha256"
-echo
-echo "root: OK"
-echo "dev:  OK"
-echo
-echo "Reload VS Code / start a new Codex chat."
+    if [ ! -e "$SUPERPOWERS_DIR" ]; then
+        git clone --branch "$SUPERPOWERS_REF" --depth 1 "$SUPERPOWERS_REPO" "$SUPERPOWERS_DIR"
+    else
+        local origin_url current_commit target_commit
+
+        origin_url="$(git -C "$SUPERPOWERS_DIR" remote get-url origin 2>/dev/null || true)"
+        case "$origin_url" in
+            "$SUPERPOWERS_REPO"|"https://github.com/obra/superpowers"|"git@github.com:obra/superpowers.git")
+                ;;
+            *)
+                die "$SUPERPOWERS_DIR has unexpected origin: ${origin_url:-<none>}; nothing was changed"
+                ;;
+        esac
+
+        if [ -n "$(git -C "$SUPERPOWERS_DIR" status --porcelain --untracked-files=all)" ]; then
+            die "$SUPERPOWERS_DIR has local changes; refusing to overwrite them"
+        fi
+
+        if ! git -C "$SUPERPOWERS_DIR" rev-parse -q --verify "refs/tags/$SUPERPOWERS_REF" >/dev/null 2>&1; then
+            git -C "$SUPERPOWERS_DIR" fetch --depth 1 origin "refs/tags/$SUPERPOWERS_REF:refs/tags/$SUPERPOWERS_REF"
+        fi
+
+        current_commit="$(git -C "$SUPERPOWERS_DIR" rev-parse HEAD)"
+        target_commit="$(git -C "$SUPERPOWERS_DIR" rev-list -n 1 "$SUPERPOWERS_REF")"
+
+        if [ "$current_commit" != "$target_commit" ]; then
+            git -C "$SUPERPOWERS_DIR" checkout --detach "$SUPERPOWERS_REF"
+        fi
+    fi
+
+    test -f "$SUPERPOWERS_DIR/skills/using-superpowers/SKILL.md" \
+        || die "Superpowers installation is incomplete: using-superpowers/SKILL.md not found"
+
+    chown -R root:root "$SUPERPOWERS_DIR"
+    chmod -R go-w "$SUPERPOWERS_DIR"
+
+    echo "Superpowers ready at $SUPERPOWERS_DIR ($SUPERPOWERS_REF)"
+}
+
+install_agents() {
+    echo
+    echo "=== Global AGENTS.md ==="
+
+    install -d -m 755 -o root -g root "$AGENTS_DIR"
+    tmp_agents="$(mktemp "$AGENTS_DIR/.AGENTS.md.XXXXXX")"
+
+    curl -fsSL "$AGENTS_URL" -o "$tmp_agents"
+
+    local agents_size
+    agents_size="$(wc -c < "$tmp_agents")"
+
+    if [ "$agents_size" -lt 1000 ]; then
+        die "downloaded AGENTS.md is unexpectedly small: ${agents_size} bytes"
+    fi
+
+    grep -Fqx '# Global Codex Working Rules' "$tmp_agents" \
+        || die "downloaded AGENTS.md failed identity check"
+
+    if [ -e "$AGENTS_FILE" ] && [ ! -f "$AGENTS_FILE" ]; then
+        die "$AGENTS_FILE exists but is not a regular file"
+    fi
+
+    chown root:root "$tmp_agents"
+    chmod 0644 "$tmp_agents"
+    mv -f "$tmp_agents" "$AGENTS_FILE"
+    tmp_agents=""
+
+    echo "AGENTS.md ready at $AGENTS_FILE"
+}
+
+main() {
+    trap cleanup EXIT
+
+    if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+        die "run this installer as root"
+    fi
+
+    command -v curl >/dev/null 2>&1 || die "curl is required"
+    command -v getent >/dev/null 2>&1 || die "getent is required"
+    command -v runuser >/dev/null 2>&1 || die "runuser is required"
+
+    if ! id dev >/dev/null 2>&1; then
+        die "user 'dev' does not exist yet; create dev first, then rerun this installer"
+    fi
+
+    if ! command -v git >/dev/null 2>&1; then
+        echo "Git not found; installing git..."
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y git ca-certificates
+    fi
+
+    install_superpowers
+    install_agents
+
+    echo
+    echo "=== User links ==="
+    setup_user root
+    setup_user dev
+
+    echo
+    echo "=== Verification ==="
+    verify_user root
+    verify_user dev
+
+    local superpowers_commit agents_sha256
+    superpowers_commit="$(git -C "$SUPERPOWERS_DIR" rev-parse --short=12 HEAD)"
+    agents_sha256="$(sha256sum "$AGENTS_FILE" | awk '{print $1}')"
+
+    echo
+    echo "=== CODEX ENVIRONMENT READY ==="
+    echo "Superpowers ref:    $SUPERPOWERS_REF"
+    echo "Superpowers commit: $superpowers_commit"
+    echo "AGENTS.md SHA256:   $agents_sha256"
+    echo
+    echo "root: OK"
+    echo "dev:  OK"
+    echo
+    echo "Reload VS Code / start a new Codex chat."
+}
+
+main "$@"
