@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly SOURCE_URL="https://raw.githubusercontent.com/jon4eg04/usefull/main/codex-bootstrap/AGENTS.md"
+readonly DESTINATION="/etc/codex/AGENTS.md"
+
+log_error() {
+  local message="$1"
+  command -v logger >/dev/null 2>&1 && logger -t codex-agents-sync -- "$message" || true
+  printf 'codex-agents-sync: %s\n' "$message" >&2
+}
+
+die() {
+  log_error "$1"
+  exit 1
+}
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || die "must run as root"
+
+install -d -o root -g root -m 0755 "$(dirname "$DESTINATION")" || die "cannot create destination directory"
+
+tmp_file="$(mktemp /tmp/codex-agents-sync.XXXXXX)" || die "cannot create temporary file"
+staged_file="${DESTINATION}.new.$$"
+cleanup() {
+  rm -f "$tmp_file" "$staged_file"
+}
+trap cleanup EXIT
+
+curl -fsSL \
+  --retry 3 \
+  --retry-delay 2 \
+  --connect-timeout 10 \
+  --max-time 30 \
+  "$SOURCE_URL" \
+  -o "$tmp_file" || die "download failed; keeping existing AGENTS.md"
+
+[[ -s "$tmp_file" ]] || die "downloaded file is empty; keeping existing AGENTS.md"
+[[ $(wc -c < "$tmp_file") -ge 1000 ]] || die "downloaded file is unexpectedly small; keeping existing AGENTS.md"
+head -n 1 "$tmp_file" | grep -Fxq '# Global Codex Working Rules' || die "downloaded file failed header validation; keeping existing AGENTS.md"
+grep -Fq '## Process cost control' "$tmp_file" || die "downloaded file failed content validation; keeping existing AGENTS.md"
+
+if [[ -f "$DESTINATION" ]] && cmp -s "$tmp_file" "$DESTINATION"; then
+  exit 0
+fi
+
+install -o root -g root -m 0644 "$tmp_file" "$staged_file" || die "cannot stage updated AGENTS.md"
+mv -f "$staged_file" "$DESTINATION" || die "cannot replace AGENTS.md"
+
+command -v logger >/dev/null 2>&1 && logger -t codex-agents-sync -- "updated $DESTINATION from GitHub" || true
