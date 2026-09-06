@@ -143,6 +143,8 @@ For webhooks, queues, APIs, CRM, payments, or messages, consider:
 - timeouts;
 - idempotency.
 
+For external API integrations, prove the transport contract before building substantial logic around it. Keep a concise evidence record of the endpoint/method, authentication placement, required request shape, relevant success/error response shape, and the source or safe probe that established each fact. When practical, run at least one non-destructive request using the same authentication and transport form that production code will use. Do not let an unverified assumption about auth, field names, or response shape propagate into fixtures, documentation, and implementation.
+
 Do not report success before actual confirmation.
 
 Avoid duplicate external side effects.
@@ -156,6 +158,8 @@ Do not print secret values unnecessarily.
 Use the project's established environment/configuration mechanism.
 
 Do not rotate or invalidate credentials unless explicitly requested.
+
+Production diagnostics must minimize sensitive and customer data, not only credentials. Prefer allowlisted structured fields over full external API request/response bodies. Do not persist full customer/payment payloads, signed/payment URLs, phone numbers, personal identifiers, or equivalent sensitive fields unless they are specifically necessary for the active diagnosis and appropriately protected. Temporary verbose logging should be time-bounded and removed or disabled after diagnosis; use rotation/retention when logs can grow materially.
 
 ## Dependencies and architecture
 
@@ -221,6 +225,10 @@ Project-level AGENTS.md files should contain project-specific rules instead of d
 Do not inspect an entire repository when the task is local.
 
 Start with the relevant files, callers, dependencies, tests, and documentation; expand only when evidence requires it.
+
+For documentation, API/REST, JSON, and ordinary URL content retrieval, prefer non-interactive HTTP/search/fetch tools and request only the needed fields or ranges. Do not open an integrated/interactive browser merely to read content that can be retrieved directly. Use the browser when JavaScript execution, visual verification, authentication/UI state, or interaction with the page is actually required.
+
+Once research establishes a stable external contract or other reusable facts, record a short verified summary/table and reuse it instead of repeatedly reopening the same pages, large responses, or logs. Re-check the source only when the fact is uncertain, may have changed, or new evidence contradicts the summary.
 
 Avoid repeated explanations and unnecessarily long implementation reports.
 
