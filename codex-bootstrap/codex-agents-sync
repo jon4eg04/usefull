@@ -26,12 +26,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Bust raw.githubusercontent.com's CDN cache so an explicit/manual sync can see a
+# commit made seconds ago instead of waiting for the cached branch URL to expire.
+request_url="${SOURCE_URL}?v=$(date +%s)"
+
 curl -fsSL \
   --retry 3 \
   --retry-delay 2 \
   --connect-timeout 10 \
   --max-time 30 \
-  "$SOURCE_URL" \
+  -H 'Cache-Control: no-cache' \
+  "$request_url" \
   -o "$tmp_file" || die "download failed; keeping existing AGENTS.md"
 
 [[ -s "$tmp_file" ]] || die "downloaded file is empty; keeping existing AGENTS.md"
