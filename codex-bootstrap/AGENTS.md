@@ -228,6 +228,8 @@ Start with the relevant files, callers, dependencies, tests, and documentation; 
 
 For documentation, API/REST, JSON, and ordinary URL content retrieval, prefer non-interactive HTTP/search/fetch tools and request only the needed fields or ranges. Do not open an integrated/interactive browser merely to read content that can be retrieved directly. Use the browser when JavaScript execution, visual verification, authentication/UI state, or interaction with the page is actually required.
 
+For GitHub specifically, prefer non-interactive repository/code/issue/commit access: GitHub CLI or API when authenticated and available, direct HTTP/fetch/curl for public pages or `raw.githubusercontent.com`, or a local clone plus `rg`/`grep` when searching repository contents. Do not open the Integrated Browser solely to search GitHub, inspect GitHub code, or read raw GitHub files. If GitHub code search requires authentication and no non-interactive authenticated route is available, use an appropriate alternative or report that limitation instead of opening an unauthenticated browser search page. Use the browser only when GitHub's interactive authenticated UI or a visual/UI check is genuinely required.
+
 Once research establishes a stable external contract or other reusable facts, record a short verified summary/table and reuse it instead of repeatedly reopening the same pages, large responses, or logs. Re-check the source only when the fact is uncertain, may have changed, or new evidence contradicts the summary.
 
 Avoid repeated explanations and unnecessarily long implementation reports.
